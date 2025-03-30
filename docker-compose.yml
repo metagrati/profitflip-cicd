@@ -10,10 +10,10 @@ services:
       - "8000:8000"
     environment:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
-      - SCRIPT_PATH=${SCRIPT_PATH:-/host/scripts/run.sh}
+      - SCRIPT_PATH=/home/1/profitflip-cicd/scripts/run.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /home:/home  # Mount home directory to access ~/profitflip-front-visual
+      - /home:/home
     restart: unless-stopped
 
 networks:

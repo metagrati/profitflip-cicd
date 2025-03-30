@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 # Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
-SCRIPT_PATH = os.getenv('SCRIPT_PATH', '/host/scripts/run.sh')  # Path to script on host
+SCRIPT_PATH = os.getenv('SCRIPT_PATH', '/home/1/profitflip-cicd/scripts/run.sh')
 
 def verify_webhook_signature(payload_body, signature_header):
     """Verify GitHub webhook signature."""
@@ -67,17 +67,28 @@ def execute_script(payload):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    if request.method != 'POST':
-        return 'OK'
+    # Check content type
+    if not request.is_json:
+        app.logger.error(f"Received non-JSON payload with Content-Type: {request.headers.get('Content-Type')}")
+        return 'Content-Type must be application/json', 415
+    
+    # Get the raw payload body for signature verification
+    payload_body = request.get_data()
     
     # Verify webhook signature
     signature_header = request.headers.get('X-Hub-Signature-256')
-    if not verify_webhook_signature(request.get_data(), signature_header):
+    if not verify_webhook_signature(payload_body, signature_header):
+        app.logger.error("Invalid webhook signature")
         abort(401)
     
     # Process the webhook
     event_type = request.headers.get('X-GitHub-Event')
     payload = request.get_json()
+    
+    # Log headers for debugging
+    app.logger.info("Received headers:")
+    for header, value in request.headers.items():
+        app.logger.info(f"{header}: {value}")
     
     # Only process push events
     if event_type != 'push':
@@ -86,6 +97,7 @@ def webhook():
     
     # Log the event
     app.logger.info(f"Received push event for repository: {payload.get('repository', {}).get('name')}")
+    app.logger.info(f"Payload: {json.dumps(payload, indent=2)}")
     
     # Execute the script
     output = execute_script(payload)

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  webhook-listener:
+    build: .
+    container_name: webhook-listener
+    networks:
+      - ssl_default
+    ports:
+      - "8000:8000"
+    environment:
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - SCRIPT_PATH=${SCRIPT_PATH:-/host/scripts/run.sh}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home:/home  # Mount home directory to access ~/profitflip-front-visual
+    restart: unless-stopped
+
+networks:
+  ssl_default:
+    external: true 

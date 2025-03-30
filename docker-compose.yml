@@ -6,8 +6,8 @@ services:
     container_name: webhook-listener
     networks:
       - ssl_default
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - SCRIPT_PATH=/home/1/profitflip-cicd/scripts/run.sh

@@ -1,0 +1,2 @@
+tee: /var/log/deploy.log: Permission denied
+[2025-03-31 10:43:39 UTC] Starting deployment monitor

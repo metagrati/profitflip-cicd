@@ -1,10 +1,23 @@
 #!/bin/bash
-# This script monitors a deployment file and triggers a deployment process when needed.
 
 # Configuration
 DEPLOY_FILE="/var/lib/docker/volumes/cicd_deploy-data/_data/deploy.json"
 FRONTEND_DIR="/home/1/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
+
+# Function to log messages (define this FIRST)
+log() {
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $1" | tee -a "$LOG_FILE"
+}
+
+# Function to update deployment status
+update_status() {
+    local status=$1
+    local message=$2
+    sudo jq --arg status "$status" --arg message "$message" \
+        '. + {status: $status, last_message: $message}' "$DEPLOY_FILE" > "/tmp/deploy.tmp" \
+        && sudo mv "/tmp/deploy.tmp" "$DEPLOY_FILE"
+}
 
 # Function to check if deployment is needed
 check_deployment() {
@@ -20,36 +33,11 @@ check_deployment() {
     return 1
 }
 
-# Function to update deployment status
-update_status() {
-    local status=$1
-    local message=$2
-    sudo jq --arg status "$status" --arg message "$message" \
-        '. + {status: $status, last_message: $message}' "$DEPLOY_FILE" > "/tmp/deploy.tmp" \
-        && sudo mv "/tmp/deploy.tmp" "$DEPLOY_FILE"
-}
-
-# Rest of the script remains the same...
-
-# Function to check if deployment is needed
-check_deployment() {
-    if [ ! -f "$DEPLOY_FILE" ]; then
-        return 1
-    fi
-    
-    local status=$(jq -r '.status' "$DEPLOY_FILE" 2>/dev/null)
-    if [ "$status" = "pending" ]; then
-        return 0
-    fi
-    
-    return 1
-}
-
 # Function to handle deployment
 handle_deployment() {
-    local repository=$(jq -r '.repository' "$DEPLOY_FILE")
-    local branch=$(jq -r '.branch' "$DEPLOY_FILE")
-    local commit=$(jq -r '.commit' "$DEPLOY_FILE")
+    local repository=$(sudo jq -r '.repository' "$DEPLOY_FILE")
+    local branch=$(sudo jq -r '.branch' "$DEPLOY_FILE")
+    local commit=$(sudo jq -r '.commit' "$DEPLOY_FILE")
     
     log "Starting deployment for $repository:$branch (commit: $commit)"
     
@@ -107,4 +95,4 @@ while true; do
         handle_deployment
     fi
     sleep 5
-done 
+done

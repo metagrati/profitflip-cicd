@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   webhook-listener:
     build: .
@@ -8,11 +10,12 @@ services:
       - "8000"
     environment:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
-      - SCRIPT_PATH=~/profitflip-cicd/scripts/run.sh
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /home:/home
+      - deploy-data:/deploy
     restart: unless-stopped
+
+volumes:
+  deploy-data:
 
 networks:
   ssl_default:

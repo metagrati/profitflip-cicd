@@ -1,21 +1,20 @@
 import os
 import hmac
 import hashlib
-import subprocess
 import json
-import docker
+import traceback
 from flask import Flask, request, abort
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-docker_client = docker.from_env()
 
 # Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
-SCRIPT_PATH = os.getenv('SCRIPT_PATH', '/home/1/profitflip-cicd/scripts/run.sh')
+DEPLOY_FILE = '/deploy/deploy.json'
 
 def verify_webhook_signature(payload_body, signature_header):
     """Verify GitHub webhook signature."""
@@ -48,104 +47,85 @@ def verify_webhook_signature(payload_body, signature_header):
     
     return hmac.compare_digest(expected_signature, signature)
 
-def execute_script(payload):
-    """Execute the script on the host machine."""
+def write_deploy_instruction(payload):
+    """Write deployment instructions to shared volume."""
     try:
-        # Change to the frontend directory
-        os.chdir('/home/1/profitflip-front-visual')
-        app.logger.info("Changed directory to /home/1/profitflip-front-visual")
-
-        # Execute git pull
-        branch = payload.get('ref', '').replace('refs/heads/', '')
-        subprocess.run(['git', 'pull', 'origin', branch], check=True, capture_output=True, text=True)
-        app.logger.info(f"Successfully pulled from {branch}")
-
-        # Build new image
-        app.logger.info("Building new Docker image")
-        docker_client.images.build(
-            path='.',
-            tag='profitflip-frontend',
-            rm=True
-        )
-        app.logger.info("Docker image built successfully")
-
-        # Stop and remove old container if it exists
-        try:
-            old_container = docker_client.containers.get('profitflip-app')
-            old_container.stop()
-            old_container.remove()
-            app.logger.info("Stopped and removed old container")
-        except docker.errors.NotFound:
-            app.logger.info("No old container to remove")
-
-        # Start new container
-        app.logger.info("Starting new container")
-        docker_client.containers.run(
-            'profitflip-frontend',
-            name='profitflip-app',
-            network='ssl_default',
-            detach=True
-        )
-        app.logger.info("New container started successfully")
-
-        return "Deployment completed successfully"
-    except subprocess.CalledProcessError as e:
-        app.logger.error(f"Git command failed: {e.stderr}")
-        return None
-    except docker.errors.BuildError as e:
-        app.logger.error(f"Docker build failed: {e}")
-        return None
-    except docker.errors.APIError as e:
-        app.logger.error(f"Docker API error: {e}")
-        return None
+        # Create deployment instruction
+        deploy_data = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'repository': payload.get('repository', {}).get('name'),
+            'branch': payload.get('ref', '').replace('refs/heads/', ''),
+            'commit': payload.get('after'),
+            'author': payload.get('pusher', {}).get('name'),
+            'status': 'pending'
+        }
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(DEPLOY_FILE), exist_ok=True)
+        
+        # Write deployment instruction
+        with open(DEPLOY_FILE, 'w') as f:
+            json.dump(deploy_data, f, indent=2)
+            
+        app.logger.info(f"Wrote deployment instructions to {DEPLOY_FILE}")
+        app.logger.info(f"Deploy data: {json.dumps(deploy_data, indent=2)}")
+        
+        return True
     except Exception as e:
-        app.logger.error(f"Unexpected error: {e}")
-        return None
+        app.logger.error(f"Failed to write deployment instructions: {str(e)}")
+        app.logger.error(f"Traceback:\n{traceback.format_exc()}")
+        return False
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # Log headers for debugging
-    app.logger.info("Received headers:")
-    for header, value in request.headers.items():
-        app.logger.info(f"{header}: {value}")
-
-    # Get the raw payload body for signature verification
-    payload_body = request.get_data()
-    app.logger.info(f"Raw payload: {payload_body.decode('utf-8')}")
-    
-    # Verify webhook signature
-    signature_header = request.headers.get('X-Hub-Signature-256')
-    if not verify_webhook_signature(payload_body, signature_header):
-        app.logger.error("Invalid webhook signature")
-        abort(401)
-    
-    # Process the webhook
-    event_type = request.headers.get('X-GitHub-Event')
-    
-    # Parse JSON payload
     try:
-        payload = request.get_json()
+        # Log headers for debugging
+        app.logger.info("Received headers:")
+        for header, value in request.headers.items():
+            app.logger.info(f"{header}: {value}")
+
+        # Get the raw payload body for signature verification
+        payload_body = request.get_data()
+        app.logger.info(f"Raw payload: {payload_body.decode('utf-8')}")
+        
+        # Verify webhook signature
+        signature_header = request.headers.get('X-Hub-Signature-256')
+        if not verify_webhook_signature(payload_body, signature_header):
+            app.logger.error("Invalid webhook signature")
+            abort(401)
+        
+        # Process the webhook
+        event_type = request.headers.get('X-GitHub-Event')
+        
+        # Parse JSON payload
+        try:
+            payload = request.get_json()
+        except Exception as e:
+            app.logger.error(f"Failed to parse JSON payload: {e}")
+            app.logger.error(f"Traceback:\n{traceback.format_exc()}")
+            return 'Invalid JSON payload', 400
+        
+        # Only process push events
+        if event_type != 'push':
+            app.logger.info(f"Ignoring non-push event: {event_type}")
+            return 'OK', 200
+        
+        # Log the event
+        app.logger.info(f"Received push event for repository: {payload.get('repository', {}).get('name')}")
+        app.logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+        
+        # Write deployment instructions
+        if write_deploy_instruction(payload):
+            app.logger.info("Successfully wrote deployment instructions")
+            return 'OK', 200
+        else:
+            app.logger.error("Failed to write deployment instructions")
+            return 'Failed to write deployment instructions', 500
+            
     except Exception as e:
-        app.logger.error(f"Failed to parse JSON payload: {e}")
-        return 'Invalid JSON payload', 400
-    
-    # Only process push events
-    if event_type != 'push':
-        app.logger.info(f"Ignoring non-push event: {event_type}")
-        return 'OK', 200
-    
-    # Log the event
-    app.logger.info(f"Received push event for repository: {payload.get('repository', {}).get('name')}")
-    app.logger.info(f"Payload: {json.dumps(payload, indent=2)}")
-    
-    # Execute the script
-    output = execute_script(payload)
-    if output:
-        app.logger.info(f"Script executed successfully: {output}")
-        return 'OK', 200
-    else:
-        app.logger.error("Script execution failed")
-        return 'Script execution failed', 500
+        app.logger.error(f"Webhook processing error: {str(e)}")
+        app.logger.error(f"Traceback:\n{traceback.format_exc()}")
+        return 'Internal server error', 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000) 

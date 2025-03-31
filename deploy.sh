@@ -2,10 +2,10 @@
 
 # Configuration
 DEPLOY_FILE="/deploy/deploy.json"  # This matches the webhook listener's mount point
-FRONTEND_DIR="/home/1/profitflip-front-visual"
+FRONTEND_DIR="/home/profitflip/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
 
-# Function to log messages (define this FIRST)
+# Function to log messages
 log() {
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $1" | tee -a "$LOG_FILE"
 }
@@ -14,18 +14,18 @@ log() {
 update_status() {
     local status=$1
     local message=$2
-    sudo jq --arg status "$status" --arg message "$message" \
-        '. + {status: $status, last_message: $message}' "$DEPLOY_FILE" > "/tmp/deploy.tmp" \
-        && sudo mv "/tmp/deploy.tmp" "$DEPLOY_FILE"
+    jq --arg status "$status" --arg message "$message" \
+        '. + {status: $status, last_message: $message}' "$DEPLOY_FILE" > "${DEPLOY_FILE}.tmp" \
+        && mv "${DEPLOY_FILE}.tmp" "$DEPLOY_FILE"
 }
 
 # Function to check if deployment is needed
 check_deployment() {
-    if ! sudo test -f "$DEPLOY_FILE"; then
+    if [ ! -f "$DEPLOY_FILE" ]; then
         return 1
     fi
     
-    local status=$(sudo jq -r '.status' "$DEPLOY_FILE" 2>/dev/null)
+    local status=$(jq -r '.status' "$DEPLOY_FILE" 2>/dev/null)
     if [ "$status" = "pending" ]; then
         return 0
     fi
@@ -35,9 +35,9 @@ check_deployment() {
 
 # Function to handle deployment
 handle_deployment() {
-    local repository=$(sudo jq -r '.repository' "$DEPLOY_FILE")
-    local branch=$(sudo jq -r '.branch' "$DEPLOY_FILE")
-    local commit=$(sudo jq -r '.commit' "$DEPLOY_FILE")
+    local repository=$(jq -r '.repository' "$DEPLOY_FILE")
+    local branch=$(jq -r '.branch' "$DEPLOY_FILE")
+    local commit=$(jq -r '.commit' "$DEPLOY_FILE")
     
     log "Starting deployment for $repository:$branch (commit: $commit)"
     

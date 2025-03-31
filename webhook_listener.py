@@ -62,6 +62,18 @@ def verify_webhook_signature(payload_body, signature_header):
 def write_deploy_instruction(payload):
     """Write deployment instructions to shared volume."""
     try:
+        # Log the current state of the file
+        app.logger.info("Checking current deploy file state...")
+        if os.path.exists(DEPLOY_FILE):
+            try:
+                with open(DEPLOY_FILE, 'r') as f:
+                    current_data = json.load(f)
+                app.logger.info(f"Current deploy file content: {json.dumps(current_data, indent=2)}")
+            except Exception as e:
+                app.logger.error(f"Error reading current deploy file: {str(e)}")
+        else:
+            app.logger.info("Deploy file does not exist yet")
+
         # Create deployment instruction
         deploy_data = {
             'timestamp': datetime.utcnow().isoformat(),
@@ -72,20 +84,41 @@ def write_deploy_instruction(payload):
             'status': 'pending'
         }
         
+        app.logger.info(f"Created new deploy data: {json.dumps(deploy_data, indent=2)}")
+        
         # Ensure directory exists
-        os.makedirs(os.path.dirname(DEPLOY_FILE), exist_ok=True)
+        deploy_dir = os.path.dirname(DEPLOY_FILE)
+        app.logger.info(f"Ensuring directory exists: {deploy_dir}")
+        os.makedirs(deploy_dir, exist_ok=True)
+        
+        # Check directory permissions
+        app.logger.info(f"Directory permissions: {oct(os.stat(deploy_dir).st_mode)}")
         
         # Write deployment instruction
+        app.logger.info("Writing new deploy data...")
         with open(DEPLOY_FILE, 'w') as f:
             json.dump(deploy_data, f, indent=2)
             
-        app.logger.info(f"Wrote deployment instructions to {DEPLOY_FILE}")
-        app.logger.info(f"Deploy data: {json.dumps(deploy_data, indent=2)}")
-        
+        # Verify the write
+        app.logger.info("Verifying write operation...")
+        if os.path.exists(DEPLOY_FILE):
+            with open(DEPLOY_FILE, 'r') as f:
+                written_data = json.load(f)
+            app.logger.info(f"Written deploy file content: {json.dumps(written_data, indent=2)}")
+            if written_data != deploy_data:
+                app.logger.error("Written data does not match intended data!")
+                return False
+        else:
+            app.logger.error("Deploy file does not exist after write!")
+            return False
+            
+        app.logger.info(f"Successfully wrote deployment instructions to {DEPLOY_FILE}")
         return True
     except Exception as e:
         app.logger.error(f"Failed to write deployment instructions: {str(e)}")
         app.logger.error(f"Traceback:\n{traceback.format_exc()}")
+        app.logger.error(f"Current working directory: {os.getcwd()}")
+        app.logger.error(f"Deploy file path: {os.path.abspath(DEPLOY_FILE)}")
         return False
 
 @app.route('/webhook', methods=['POST'])

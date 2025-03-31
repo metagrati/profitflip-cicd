@@ -4,6 +4,7 @@
 DEPLOY_FILE="/var/lib/docker/volumes/profitflip-cicd_deploy-data/_data/deploy.json"
 FRONTEND_DIR="/home/profitflip/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
+ORIGINAL_USER=$(who am i | awk '{print $1}')
 
 # Function to log messages with more detail
 log() {
@@ -82,9 +83,9 @@ update_status() {
 
 # Function to handle deployment
 handle_deployment() {
-    local repository=$(jq -r '.repository' "$DEPLOY_FILE")
-    local branch=$(jq -r '.branch' "$DEPLOY_FILE")
-    local commit=$(jq -r '.commit' "$DEPLOY_FILE")
+    local repository=$(grep -o '"repository": *"[^"]*"' "$DEPLOY_FILE" | cut -d'"' -f4)
+    local branch=$(grep -o '"branch": *"[^"]*"' "$DEPLOY_FILE" | cut -d'"' -f4)
+    local commit=$(grep -o '"commit": *"[^"]*"' "$DEPLOY_FILE" | cut -d'"' -f4)
     
     log "DEBUG: Starting deployment process"
     log "DEBUG: Repository: $repository"
@@ -104,10 +105,10 @@ handle_deployment() {
     
     log "DEBUG: Current directory after cd: $(pwd)"
     log "DEBUG: Git status before pull:"
-    git status
+    sudo -u "$ORIGINAL_USER" git status
     
     log "DEBUG: Pulling latest changes from $branch"
-    if ! git pull origin "$branch"; then
+    if ! sudo -u "$ORIGINAL_USER" git pull origin "$branch"; then
         log "DEBUG: Git pull failed. Git error: $?"
         update_status "failed" "Failed to pull changes"
         return 1

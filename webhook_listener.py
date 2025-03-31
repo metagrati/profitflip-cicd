@@ -52,8 +52,8 @@ def execute_script(payload):
     """Execute the script on the host machine."""
     try:
         # Change to the frontend directory
-        os.chdir('/home/1/profitflip-front-visual')
-        app.logger.info("Changed directory to /home/1/profitflip-front-visual")
+        os.chdir('~/profitflip-front-visual')
+        app.logger.info("Changed directory to ~/profitflip-front-visual")
 
         # Execute git pull
         branch = payload.get('ref', '').replace('refs/heads/', '')

@@ -33,15 +33,13 @@ check_deployment() {
     fi
     
     log "DEBUG: Reading status from deploy file..."
-    local status=$(jq -r '.status // empty' "$DEPLOY_FILE" 2>/dev/null)
-    log "DEBUG: Current status: '$status'"  # Added quotes to see if status is empty or contains whitespace
-    
-    if [ "$status" = "pending" ]; then
+    # Try a direct grep approach first
+    if grep -q '"status": *"pending"' "$DEPLOY_FILE"; then
         log "DEBUG: Found pending deployment"
         return 0
     fi
     
-    log "DEBUG: Status is not pending: '$status'"
+    log "DEBUG: Status is not pending"
     return 1
 }
 

@@ -15,7 +15,7 @@ docker_client = docker.from_env()
 
 # Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
-SCRIPT_PATH = os.getenv('SCRIPT_PATH', '/home/1/profitflip-cicd/scripts/run.sh')
+SCRIPT_PATH = os.getenv('SCRIPT_PATH', '~/profitflip-cicd/scripts/run.sh')
 
 def verify_webhook_signature(payload_body, signature_header):
     """Verify GitHub webhook signature."""

@@ -18,17 +18,33 @@ SCRIPT_PATH = os.getenv('SCRIPT_PATH', '/home/1/profitflip-cicd/scripts/run.sh')
 def verify_webhook_signature(payload_body, signature_header):
     """Verify GitHub webhook signature."""
     if not WEBHOOK_SECRET:
+        app.logger.error("WEBHOOK_SECRET not configured")
         raise ValueError("WEBHOOK_SECRET not configured")
     
     if not signature_header:
+        app.logger.error("No signature header received")
         return False
     
-    sha_name, signature = signature_header.split('=')
+    try:
+        sha_name, signature = signature_header.split('=', 1)
+    except ValueError:
+        app.logger.error(f"Invalid signature format: {signature_header}")
+        return False
+        
     if sha_name != 'sha256':
+        app.logger.error(f"Invalid hash algorithm: {sha_name}")
         return False
     
-    mac = hmac.new(WEBHOOK_SECRET.encode(), msg=payload_body, digestmod=hashlib.sha256)
-    return hmac.compare_digest(mac.hexdigest(), signature)
+    # Calculate expected signature
+    mac = hmac.new(WEBHOOK_SECRET.encode('utf-8'), msg=payload_body, digestmod=hashlib.sha256)
+    expected_signature = mac.hexdigest()
+    
+    app.logger.info(f"Received signature: {signature}")
+    app.logger.info(f"Expected signature: {expected_signature}")
+    app.logger.info(f"Secret being used: {WEBHOOK_SECRET}")
+    app.logger.info(f"Payload length: {len(payload_body)} bytes")
+    
+    return hmac.compare_digest(expected_signature, signature)
 
 def execute_script(payload):
     """Execute the script on the host machine."""
@@ -67,13 +83,14 @@ def execute_script(payload):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # Check content type
-    if not request.is_json:
-        app.logger.error(f"Received non-JSON payload with Content-Type: {request.headers.get('Content-Type')}")
-        return 'Content-Type must be application/json', 415
-    
+    # Log headers for debugging
+    app.logger.info("Received headers:")
+    for header, value in request.headers.items():
+        app.logger.info(f"{header}: {value}")
+
     # Get the raw payload body for signature verification
     payload_body = request.get_data()
+    app.logger.info(f"Raw payload: {payload_body.decode('utf-8')}")
     
     # Verify webhook signature
     signature_header = request.headers.get('X-Hub-Signature-256')
@@ -83,12 +100,13 @@ def webhook():
     
     # Process the webhook
     event_type = request.headers.get('X-GitHub-Event')
-    payload = request.get_json()
     
-    # Log headers for debugging
-    app.logger.info("Received headers:")
-    for header, value in request.headers.items():
-        app.logger.info(f"{header}: {value}")
+    # Parse JSON payload
+    try:
+        payload = request.get_json()
+    except Exception as e:
+        app.logger.error(f"Failed to parse JSON payload: {e}")
+        return 'Invalid JSON payload', 400
     
     # Only process push events
     if event_type != 'push':

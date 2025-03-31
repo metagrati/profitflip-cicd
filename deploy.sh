@@ -25,7 +25,7 @@ debug_check() {
 
 # Function to check if deployment is needed
 check_deployment() {
-    debug_check  # Add debug information
+    debug_check
 
     if [ ! -f "$DEPLOY_FILE" ]; then
         log "DEBUG: Deploy file does not exist"
@@ -33,13 +33,30 @@ check_deployment() {
     fi
     
     log "DEBUG: Reading status from deploy file..."
-    # Try a direct grep approach first
-    if grep -q '"status": *"pending"' "$DEPLOY_FILE"; then
+    local status=$(grep -o '"status": *"[^"]*"' "$DEPLOY_FILE" | cut -d'"' -f4)
+    local timestamp=$(grep -o '"timestamp": *"[^"]*"' "$DEPLOY_FILE" | cut -d'"' -f4)
+    log "DEBUG: Current status: '$status'"
+    
+    if [ "$status" = "pending" ]; then
         log "DEBUG: Found pending deployment"
         return 0
+    elif [ "$status" = "failed" ]; then
+        # Calculate time since last attempt (5 minutes = 300 seconds)
+        local now=$(date +%s)
+        local deploy_time=$(date -d "$timestamp" +%s)
+        local time_diff=$((now - deploy_time))
+        
+        if [ $time_diff -gt 300 ]; then
+            log "DEBUG: Retrying failed deployment after 5 minutes"
+            # Reset status to pending
+            sed -i 's/"status": *"failed"/"status": "pending"/' "$DEPLOY_FILE"
+            return 0
+        else
+            log "DEBUG: Failed deployment too recent to retry (waiting for 5 minutes)"
+        fi
     fi
     
-    log "DEBUG: Status is not pending"
+    log "DEBUG: No pending deployment found"
     return 1
 }
 

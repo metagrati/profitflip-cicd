@@ -51,40 +51,49 @@ def verify_webhook_signature(payload_body, signature_header):
 def execute_script(payload):
     """Execute the script on the host machine."""
     try:
-        # Get the host container
-        host_container = docker_client.containers.get('host')
-        
-        # Execute commands on the host machine
-        commands = [
-            f"cd /home/1/profitflip-front-visual",
-            f"git pull origin {payload.get('ref', '').replace('refs/heads/', '')}",
-            "docker build -t profitflip-frontend .",
-            "docker stop profitflip-app || true",
-            "docker rm profitflip-app || true",
-            "docker run -d --name profitflip-app --network ssl_default profitflip-frontend"
-        ]
-        
-        for cmd in commands:
-            app.logger.info(f"Executing command: {cmd}")
-            result = host_container.exec_run(
-                cmd,
-                environment={'WEBHOOK_PAYLOAD': json.dumps(payload)},
-                stream=True
-            )
-            
-            # Log output in real-time
-            for output in result.output:
-                if output:
-                    app.logger.info(output.decode('utf-8').strip())
-            
-            # Check exit code
-            if result.exit_code != 0:
-                app.logger.error(f"Command failed with exit code {result.exit_code}")
-                return None
-        
+        # Change to the frontend directory
+        os.chdir('/home/1/profitflip-front-visual')
+        app.logger.info("Changed directory to /home/1/profitflip-front-visual")
+
+        # Execute git pull
+        branch = payload.get('ref', '').replace('refs/heads/', '')
+        subprocess.run(['git', 'pull', 'origin', branch], check=True, capture_output=True, text=True)
+        app.logger.info(f"Successfully pulled from {branch}")
+
+        # Build new image
+        app.logger.info("Building new Docker image")
+        docker_client.images.build(
+            path='.',
+            tag='profitflip-frontend',
+            rm=True
+        )
+        app.logger.info("Docker image built successfully")
+
+        # Stop and remove old container if it exists
+        try:
+            old_container = docker_client.containers.get('profitflip-app')
+            old_container.stop()
+            old_container.remove()
+            app.logger.info("Stopped and removed old container")
+        except docker.errors.NotFound:
+            app.logger.info("No old container to remove")
+
+        # Start new container
+        app.logger.info("Starting new container")
+        docker_client.containers.run(
+            'profitflip-frontend',
+            name='profitflip-app',
+            network='ssl_default',
+            detach=True
+        )
+        app.logger.info("New container started successfully")
+
         return "Deployment completed successfully"
-    except docker.errors.NotFound:
-        app.logger.error("Host container not found")
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f"Git command failed: {e.stderr}")
+        return None
+    except docker.errors.BuildError as e:
+        app.logger.error(f"Docker build failed: {e}")
         return None
     except docker.errors.APIError as e:
         app.logger.error(f"Docker API error: {e}")

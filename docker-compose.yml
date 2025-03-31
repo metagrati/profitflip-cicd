@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   webhook-listener:
     build: .
@@ -9,6 +7,15 @@ services:
       - deploy-data:/deploy
     environment:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    networks:
+      - ssl_default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
 volumes:

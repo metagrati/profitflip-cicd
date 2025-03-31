@@ -3,7 +3,7 @@ import hmac
 import hashlib
 import json
 import traceback
-from flask import Flask, request, abort
+from flask import Flask, request, abort, jsonify
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -15,6 +15,18 @@ app = Flask(__name__)
 # Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 DEPLOY_FILE = '/deploy/deploy.json'
+
+# Enable debug logging
+app.logger.setLevel('DEBUG')
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({
+        'status': 'healthy',
+        'webhook_secret_configured': bool(WEBHOOK_SECRET),
+        'deploy_file_exists': os.path.exists(DEPLOY_FILE)
+    })
 
 def verify_webhook_signature(payload_body, signature_header):
     """Verify GitHub webhook signature."""
@@ -117,15 +129,24 @@ def webhook():
         # Write deployment instructions
         if write_deploy_instruction(payload):
             app.logger.info("Successfully wrote deployment instructions")
-            return 'OK', 200
+            return jsonify({
+                'status': 'success',
+                'message': 'Deployment instructions written successfully'
+            }), 200
         else:
             app.logger.error("Failed to write deployment instructions")
-            return 'Failed to write deployment instructions', 500
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to write deployment instructions'
+            }), 500
             
     except Exception as e:
         app.logger.error(f"Webhook processing error: {str(e)}")
         app.logger.error(f"Traceback:\n{traceback.format_exc()}")
-        return 'Internal server error', 500
+        return jsonify({
+            'status': 'error',
+            'message': 'Internal server error'
+        }), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000) 

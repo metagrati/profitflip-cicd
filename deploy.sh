@@ -5,6 +5,11 @@ DEPLOY_FILE="/var/lib/docker/volumes/cicd_deploy-data/_data/deploy.json"
 FRONTEND_DIR="/home/1/profitflip-front-visual"
 LOG_FILE="/var/log/deploy.log"
 
+# Create log file and set permissions
+sudo touch "$LOG_FILE"
+sudo chown $USER:$USER "$LOG_FILE"
+sudo chmod 644 "$LOG_FILE"
+
 # Function to log messages
 log() {
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $1" | tee -a "$LOG_FILE"

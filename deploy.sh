@@ -5,6 +5,7 @@ DEPLOY_FILE="/var/lib/docker/volumes/profitflip-cicd_deploy-data/_data/deploy.js
 FRONTEND_DIR="/home/profitflip/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
 ORIGINAL_USER=$(who am i | awk '{print $1}')
+RETRY_TIMEOUT=300  # 5 minutes in seconds
 
 # Function to log messages with more detail
 log() {
@@ -38,26 +39,29 @@ check_deployment() {
     local timestamp=$(grep -o '"timestamp": *"[^"]*"' "$DEPLOY_FILE" | cut -d'"' -f4)
     log "DEBUG: Current status: '$status'"
     
+    # Calculate time since last update
+    local now=$(date +%s)
+    local deploy_time=$(date -d "$timestamp" +%s)
+    local time_diff=$((now - deploy_time))
+    
     if [ "$status" = "pending" ]; then
         log "DEBUG: Found pending deployment"
         return 0
-    elif [ "$status" = "failed" ]; then
-        # Calculate time since last attempt (5 minutes = 300 seconds)
-        local now=$(date +%s)
-        local deploy_time=$(date -d "$timestamp" +%s)
-        local time_diff=$((now - deploy_time))
-        
-        if [ $time_diff -gt 300 ]; then
-            log "DEBUG: Retrying failed deployment after 5 minutes"
+    elif [ "$status" = "failed" ] || [ "$status" = "in_progress" ]; then
+        # Check if enough time has passed since last attempt
+        if [ $time_diff -gt $RETRY_TIMEOUT ]; then
+            log "DEBUG: Retrying $status deployment after timeout ($time_diff seconds)"
             # Reset status to pending
-            sed -i 's/"status": *"failed"/"status": "pending"/' "$DEPLOY_FILE"
+            sed -i "s/\"status\": *\"[^\"]*\"/\"status\": \"pending\"/" "$DEPLOY_FILE"
+            sed -i "s/\"last_message\": *\"[^\"]*\"/\"last_message\": \"Retrying after timeout\"/" "$DEPLOY_FILE"
             return 0
         else
-            log "DEBUG: Failed deployment too recent to retry (waiting for 5 minutes)"
+            local remaining=$((RETRY_TIMEOUT - time_diff))
+            log "DEBUG: $status deployment too recent to retry (waiting for ${remaining} more seconds)"
         fi
     fi
     
-    log "DEBUG: No pending deployment found"
+    log "DEBUG: No deployment to process"
     return 1
 }
 

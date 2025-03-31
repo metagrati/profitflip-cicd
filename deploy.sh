@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-DEPLOY_FILE="/deploy/deploy.json"  # This matches the webhook listener's mount point
+DEPLOY_FILE="/var/lib/docker/volumes/profitflip-cicd_deploy-data/_data/deploy.json"  # Updated volume name
 FRONTEND_DIR="/home/profitflip/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
 

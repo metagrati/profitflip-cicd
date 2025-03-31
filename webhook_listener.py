@@ -15,7 +15,7 @@ docker_client = docker.from_env()
 
 # Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
-SCRIPT_PATH = os.getenv('SCRIPT_PATH', '~/profitflip-cicd/scripts/run.sh')
+SCRIPT_PATH = os.getenv('SCRIPT_PATH', '/home/profitflip/profitflip-cicd/scripts/run.sh')
 
 def verify_webhook_signature(payload_body, signature_header):
     """Verify GitHub webhook signature."""
@@ -52,8 +52,8 @@ def execute_script(payload):
     """Execute the script on the host machine."""
     try:
         # Change to the frontend directory
-        os.chdir('~/profitflip-frontend-visual')
-        app.logger.info("Changed directory to ~/profitflip-frontend-visual")
+        os.chdir('/home/profitflip/profitflip-front-visual')
+        app.logger.info("Changed directory to /home/profitflip/profitflip-front-visual")
 
         # Execute git pull
         branch = payload.get('ref', '').replace('refs/heads/', '')

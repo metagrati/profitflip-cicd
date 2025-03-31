@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-DEPLOY_FILE="/var/lib/docker/volumes/cicd_deploy-data/_data/deploy.json"
+DEPLOY_FILE="/deploy/deploy.json"  # This matches the webhook listener's mount point
 FRONTEND_DIR="/home/1/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
 
@@ -95,4 +95,4 @@ while true; do
         handle_deployment
     fi
     sleep 5
-done 
+done

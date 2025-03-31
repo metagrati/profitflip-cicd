@@ -4,23 +4,14 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - deploy-data:/deploy
+      - ~/deploy-data:/deploy  # Only keep this bind mount
     environment:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - FLASK_ENV=development
       - FLASK_DEBUG=1
     networks:
       - ssl_default
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
-
-volumes:
-  deploy-data:
-    driver: local
 
 networks:
   ssl_default:

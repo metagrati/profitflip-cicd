@@ -1,23 +1,35 @@
 #!/bin/bash
+# This script monitors a deployment file and triggers a deployment process when needed.
 
 # Configuration
 DEPLOY_FILE="/var/lib/docker/volumes/cicd_deploy-data/_data/deploy.json"
 FRONTEND_DIR="/home/1/profitflip-front-visual"
 LOG_FILE="$HOME/deploy.log"
 
-# Function to log messages
-log() {
-    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $1" | tee -a "$LOG_FILE"
+# Function to check if deployment is needed
+check_deployment() {
+    if ! sudo test -f "$DEPLOY_FILE"; then
+        return 1
+    fi
+    
+    local status=$(sudo jq -r '.status' "$DEPLOY_FILE" 2>/dev/null)
+    if [ "$status" = "pending" ]; then
+        return 0
+    fi
+    
+    return 1
 }
 
 # Function to update deployment status
 update_status() {
     local status=$1
     local message=$2
-    jq --arg status "$status" --arg message "$message" \
-        '. + {status: $status, last_message: $message}' "$DEPLOY_FILE" > "${DEPLOY_FILE}.tmp" \
-        && mv "${DEPLOY_FILE}.tmp" "$DEPLOY_FILE"
+    sudo jq --arg status "$status" --arg message "$message" \
+        '. + {status: $status, last_message: $message}' "$DEPLOY_FILE" > "/tmp/deploy.tmp" \
+        && sudo mv "/tmp/deploy.tmp" "$DEPLOY_FILE"
 }
+
+# Rest of the script remains the same...
 
 # Function to check if deployment is needed
 check_deployment() {

@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import subprocess
 import json
+import docker
 from flask import Flask, request, abort
 from dotenv import load_dotenv
 
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+docker_client = docker.from_env()
 
 # Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
@@ -49,9 +51,8 @@ def verify_webhook_signature(payload_body, signature_header):
 def execute_script(payload):
     """Execute the script on the host machine."""
     try:
-        # Pass the payload as an environment variable
-        env = os.environ.copy()
-        env['WEBHOOK_PAYLOAD'] = json.dumps(payload)
+        # Get the host container
+        host_container = docker_client.containers.get('host')
         
         # Execute commands on the host machine
         commands = [
@@ -64,21 +65,32 @@ def execute_script(payload):
         ]
         
         for cmd in commands:
-            result = subprocess.run(
-                ['docker', 'exec', 'host', 'bash', '-c', cmd],
-                capture_output=True,
-                text=True,
-                check=True,
-                env=env
+            app.logger.info(f"Executing command: {cmd}")
+            result = host_container.exec_run(
+                cmd,
+                environment={'WEBHOOK_PAYLOAD': json.dumps(payload)},
+                stream=True
             )
-            app.logger.info(f"Command executed: {cmd}")
-            app.logger.info(f"Output: {result.stdout}")
-            if result.stderr:
-                app.logger.warning(f"Stderr: {result.stderr}")
+            
+            # Log output in real-time
+            for output in result.output:
+                if output:
+                    app.logger.info(output.decode('utf-8').strip())
+            
+            # Check exit code
+            if result.exit_code != 0:
+                app.logger.error(f"Command failed with exit code {result.exit_code}")
+                return None
         
         return "Deployment completed successfully"
-    except subprocess.CalledProcessError as e:
-        app.logger.error(f"Command execution failed: {e.stderr}")
+    except docker.errors.NotFound:
+        app.logger.error("Host container not found")
+        return None
+    except docker.errors.APIError as e:
+        app.logger.error(f"Docker API error: {e}")
+        return None
+    except Exception as e:
+        app.logger.error(f"Unexpected error: {e}")
         return None
 
 @app.route('/webhook', methods=['POST'])

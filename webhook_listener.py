@@ -51,6 +51,11 @@ def verify_webhook_signature(payload_body, signature_header):
 def execute_script(payload):
     """Execute the script on the host machine."""
     try:
+        # show a dir of the current working directory
+        app.logger.info(f"Current working directory: {os.getcwd()}")
+        app.logger.info(f"Current user: {os.getlogin()}")
+
+        
         # Change to the frontend directory
         os.chdir('/home/profitflip/profitflip-front-visual')
         app.logger.info("Changed directory to /home/profitflip/profitflip-front-visual")

@@ -3,19 +3,17 @@ version: '3.8'
 services:
   webhook-listener:
     build: .
-    container_name: webhook-listener
-    networks:
-      - ssl_default
-    expose:
-      - "8000"
-    environment:
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+    ports:
+      - "8000:8000"
     volumes:
       - deploy-data:/deploy
+    environment:
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
     restart: unless-stopped
 
 volumes:
   deploy-data:
+    driver: local
 
 networks:
   ssl_default:
